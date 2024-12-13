@@ -15,17 +15,17 @@ pygame.init()
 
 # Constants
 WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 600
-BOARD_SIZE = 512  # Size of the chess board (8x8 squares)
-SQUARE_SIZE = BOARD_SIZE // 8
-UI_AREA_HEIGHT = 100  # Height of the UI area below the board
+WINDOW_HEIGHT = 700  # Increased to accommodate new layout
+BOARD_SIZE = 600  # Fixed board size
+SQUARE_SIZE = BOARD_SIZE // 8  # Fixed square size
+UI_AREA_HEIGHT = 150  # Increased for new layout
 BUTTON_HEIGHT = 30
 INPUT_BOX_HEIGHT = 30
+MESSAGE_AREA_HEIGHT = 40
+PIECE_SIZE = 65  # Changed back to original piece image size
+MIN_WINDOW_WIDTH = BOARD_SIZE  # Minimum width is board size
+MIN_WINDOW_HEIGHT = BOARD_SIZE + UI_AREA_HEIGHT  # Minimum height is board plus UI
 MESSAGE_DURATION = 3000  # Duration to show messages in milliseconds (3 seconds)
-PIECE_SIZE = 65  # Size for piece images
-PROMOTION_RECT_SIZE = 50  # Size of promotion selection squares
-MIN_WINDOW_WIDTH = 400
-MIN_WINDOW_HEIGHT = 480
 
 # Colors
 BOARD_COLOR_LIGHT = (240, 217, 181)   # Light squares
@@ -85,9 +85,8 @@ try:
             if os.path.exists(file_path):
                 try:
                     print(f"Loading: {filename}")  # Debug message
-                    # Load and scale each piece image
-                    image = pygame.image.load(file_path)
-                    piece_images[piece] = pygame.transform.scale(image, (PIECE_SIZE, PIECE_SIZE))
+                    # Load and use original piece images without scaling
+                    piece_images[piece] = pygame.image.load(file_path)
                     print(f"Successfully loaded: {filename}")  # Debug message
                 except pygame.error as e:
                     print(f"Error loading {filename}: {e}")
@@ -646,8 +645,8 @@ def handle_board_click(pos, width, height):
 
 def draw_board(screen, width, height):
     """Draw the chess board and pieces"""
-    SQUARE_SIZE = min(width, height - UI_AREA_HEIGHT) // 8
-    board_start_x = (width - (SQUARE_SIZE * 8)) // 2
+    # Center the board horizontally
+    board_start_x = (width - BOARD_SIZE) // 2
     
     # Draw squares
     for row in range(8):
@@ -672,47 +671,31 @@ def draw_board(screen, width, height):
             # Draw piece
             piece = board[row][col]
             if piece != " ":
-                draw_piece(screen, piece, x, y)
-    
-    # Draw promotion options if awaiting promotion
-    if awaiting_promotion and promotion_squares:
-        for rect, piece in promotion_squares:
-            pygame.draw.rect(screen, (200, 200, 200), rect)
-            draw_promotion_piece(screen, piece, rect)
-
-def draw_piece(screen, piece, x, y):
-    """Draw a piece on the board at the given position"""
-    if piece == " ":
-        return
-        
-    if piece in piece_images:
-        # Draw the piece image
-        screen.blit(piece_images[piece], (x, y))
-    else:
-        # Fall back to text representation
-        text_surface = fallback_font.render(piece, True, TEXT_COLOR)
-        text_rect = text_surface.get_rect(center=(x + SQUARE_SIZE // 2, y + SQUARE_SIZE // 2))
-        screen.blit(text_surface, text_rect)
-
-def draw_promotion_piece(screen, piece, rect):
-    """Draw a promotion piece option"""
-    if piece in piece_images:
-        image = piece_images[piece]
-        image_rect = image.get_rect(center=rect.center)
-        screen.blit(image, image_rect)
-    else:
-        text = fallback_font.render(piece.upper(), True, TEXT_COLOR)
-        text_rect = text.get_rect(center=rect.center)
-        screen.blit(text, text_rect)
+                if piece in piece_images:
+                    # Center piece in square
+                    piece_x = x + (SQUARE_SIZE - PIECE_SIZE) // 2
+                    piece_y = y + (SQUARE_SIZE - PIECE_SIZE) // 2
+                    screen.blit(piece_images[piece], (piece_x, piece_y))
+                else:
+                    # Fallback text representation
+                    text_surface = fallback_font.render(piece, True, TEXT_COLOR)
+                    text_rect = text_surface.get_rect(center=(x + SQUARE_SIZE // 2, y + SQUARE_SIZE // 2))
+                    screen.blit(text_surface, text_rect)
 
 def draw_ui(screen, width, height, current_time):
     """Draw the UI elements"""
-    ui_area_y = height - UI_AREA_HEIGHT
+    board_height = min(width, height - UI_AREA_HEIGHT)
+    ui_area_y = board_height
+    message_area_y = ui_area_y
+    buttons_area_y = message_area_y + MESSAGE_AREA_HEIGHT
+    input_area_y = buttons_area_y + BUTTON_HEIGHT + 10
+    
+    # Draw UI background
     pygame.draw.rect(screen, (240, 240, 240), (0, ui_area_y, width, UI_AREA_HEIGHT))
     
     # Draw turn indicator
     turn_text = turn_font.render(f"{turn.capitalize()}'s turn", True, TEXT_COLOR)
-    turn_rect = turn_text.get_rect(topleft=(10, ui_area_y + 10))
+    turn_rect = turn_text.get_rect(topleft=(10, buttons_area_y))
     screen.blit(turn_text, turn_rect)
     
     # Calculate button widths and spacing
@@ -720,54 +703,36 @@ def draw_ui(screen, width, height, current_time):
     button_spacing = 10
     x_pos = turn_rect.right + 20
 
-    # Draw moves button
-    moves_button_rect = pygame.Rect(x_pos, ui_area_y + 10, button_width, BUTTON_HEIGHT)
-    button_color = BUTTON_HOVER_COLOR if button_hovered and moves_button_rect.collidepoint(pygame.mouse.get_pos()) else BUTTON_COLOR
-    pygame.draw.rect(screen, button_color, moves_button_rect)
-    moves_text = text_font.render("Moves", True, TEXT_COLOR)
-    moves_text_rect = moves_text.get_rect(center=moves_button_rect.center)
-    screen.blit(moves_text, moves_text_rect)
-    x_pos += button_width + button_spacing
+    # Draw buttons
+    buttons = [
+        ("Moves", None),
+        ("Undo", None),
+        ("Redo", None),
+        ("Copy", None),
+        ("Paste", None)
+    ]
+    
+    button_rects = []
+    for button_text, _ in buttons:
+        button_rect = pygame.Rect(x_pos, buttons_area_y, button_width, BUTTON_HEIGHT)
+        button_color = BUTTON_HOVER_COLOR if button_hovered and button_rect.collidepoint(pygame.mouse.get_pos()) else BUTTON_COLOR
+        pygame.draw.rect(screen, button_color, button_rect)
+        text = text_font.render(button_text, True, TEXT_COLOR)
+        text_rect = text.get_rect(center=button_rect.center)
+        screen.blit(text, text_rect)
+        button_rects.append(button_rect)
+        x_pos += button_width + button_spacing
 
-    # Draw undo button
-    undo_button_rect = pygame.Rect(x_pos, ui_area_y + 10, button_width, BUTTON_HEIGHT)
-    button_color = BUTTON_HOVER_COLOR if button_hovered and undo_button_rect.collidepoint(pygame.mouse.get_pos()) else BUTTON_COLOR
-    pygame.draw.rect(screen, button_color, undo_button_rect)
-    undo_text = text_font.render("Undo", True, TEXT_COLOR)
-    undo_text_rect = undo_text.get_rect(center=undo_button_rect.center)
-    screen.blit(undo_text, undo_text_rect)
-    x_pos += button_width + button_spacing
+    # Draw message if needed
+    if message_text and current_time - message_start_time < MESSAGE_DURATION:
+        message_surface = text_font.render(message_text, True, message_color)
+        message_rect = message_surface.get_rect(center=(width // 2, message_area_y + MESSAGE_AREA_HEIGHT // 2))
+        screen.blit(message_surface, message_rect)
 
-    # Draw redo button
-    redo_button_rect = pygame.Rect(x_pos, ui_area_y + 10, button_width, BUTTON_HEIGHT)
-    button_color = BUTTON_HOVER_COLOR if button_hovered and redo_button_rect.collidepoint(pygame.mouse.get_pos()) else BUTTON_COLOR
-    pygame.draw.rect(screen, button_color, redo_button_rect)
-    redo_text = text_font.render("Redo", True, TEXT_COLOR)
-    redo_text_rect = redo_text.get_rect(center=redo_button_rect.center)
-    screen.blit(redo_text, redo_text_rect)
-    x_pos += button_width + button_spacing
-
-    # Draw copy FEN button
-    copy_fen_button_rect = pygame.Rect(x_pos, ui_area_y + 10, button_width, BUTTON_HEIGHT)
-    button_color = BUTTON_HOVER_COLOR if button_hovered and copy_fen_button_rect.collidepoint(pygame.mouse.get_pos()) else BUTTON_COLOR
-    pygame.draw.rect(screen, button_color, copy_fen_button_rect)
-    copy_text = text_font.render("Copy", True, TEXT_COLOR)
-    copy_text_rect = copy_text.get_rect(center=copy_fen_button_rect.center)
-    screen.blit(copy_text, copy_text_rect)
-    x_pos += button_width + button_spacing
-
-    # Draw paste FEN button
-    paste_fen_button_rect = pygame.Rect(x_pos, ui_area_y + 10, button_width, BUTTON_HEIGHT)
-    button_color = BUTTON_HOVER_COLOR if button_hovered and paste_fen_button_rect.collidepoint(pygame.mouse.get_pos()) else BUTTON_COLOR
-    pygame.draw.rect(screen, button_color, paste_fen_button_rect)
-    paste_text = text_font.render("Paste", True, TEXT_COLOR)
-    paste_text_rect = paste_text.get_rect(center=paste_fen_button_rect.center)
-    screen.blit(paste_text, paste_text_rect)
-    x_pos += button_width + button_spacing
-
-    # Draw FEN input box
-    input_box_width = width - x_pos - 20
-    input_box_rect = pygame.Rect(x_pos, ui_area_y + 10, input_box_width, BUTTON_HEIGHT)
+    # Draw FEN input box (centered and full width with margins)
+    margin = 20
+    input_box_width = width - 2 * margin
+    input_box_rect = pygame.Rect(margin, input_area_y, input_box_width, INPUT_BOX_HEIGHT)
     pygame.draw.rect(screen, (255, 255, 255), input_box_rect)
     pygame.draw.rect(screen, TEXT_COLOR if input_box_active else (200, 200, 200), input_box_rect, 2)
 
@@ -779,7 +744,7 @@ def draw_ui(screen, width, height, current_time):
     
     if text_to_display:
         fen_surface = text_font.render(text_to_display, True, TEXT_COLOR)
-        fen_rect = fen_surface.get_rect(topleft=(input_box_rect.left + 5, input_box_rect.top + (BUTTON_HEIGHT - fen_surface.get_height()) // 2))
+        fen_rect = fen_surface.get_rect(topleft=(input_box_rect.left + 5, input_box_rect.top + (INPUT_BOX_HEIGHT - fen_surface.get_height()) // 2))
         
         # Create a clipping rect for the text
         clip_rect = pygame.Rect(input_box_rect.left + 5, input_box_rect.top,
@@ -787,19 +752,13 @@ def draw_ui(screen, width, height, current_time):
         screen.set_clip(clip_rect)
         screen.blit(fen_surface, fen_rect)
         screen.set_clip(None)
-    
-    # Draw message if needed
-    if message_text and current_time - message_start_time < MESSAGE_DURATION:
-        message_surface = text_font.render(message_text, True, message_color)
-        message_rect = message_surface.get_rect(center=(width // 2, ui_area_y + UI_AREA_HEIGHT - 20))
-        screen.blit(message_surface, message_rect)
-    
+
     # Draw moves popup if active
     popup_rects = None
     if show_moves_popup:
         popup_rects = draw_moves_popup(screen, width, height)
-    
-    return moves_button_rect, popup_rects, undo_button_rect, redo_button_rect, copy_fen_button_rect, paste_fen_button_rect, input_box_rect
+
+    return button_rects[0], popup_rects, button_rects[1], button_rects[2], button_rects[3], button_rects[4], input_box_rect
 
 def handle_ui_click(pos, current_time):
     """Handle clicks in the UI area"""
@@ -863,7 +822,7 @@ def draw_moves_popup(screen, width, height):
     # Draw close button
     close_button_rect = pygame.Rect(popup_x + popup_width - 30, popup_y + 10, 20, 20)
     pygame.draw.rect(screen, (200, 200, 200), close_button_rect)
-    close_text = text_font.render("×", True, TEXT_COLOR)
+    close_text = text_font.render("��", True, TEXT_COLOR)
     close_text_rect = close_text.get_rect(center=close_button_rect.center)
     screen.blit(close_text, close_text_rect)
 
@@ -1291,6 +1250,10 @@ def main():
     # Initialize pygame and fonts
     init_pygame()
     
+    # Set minimum window size
+    pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
+    pygame.event.post(pygame.event.Event(pygame.VIDEORESIZE, {'w': WINDOW_WIDTH, 'h': WINDOW_HEIGHT}))
+    
     # Try to load saved game
     if os.path.exists(SAVE_FILE):
         if load_game():
@@ -1306,20 +1269,14 @@ def main():
         current_time = pygame.time.get_ticks()
         mouse_pos = pygame.mouse.get_pos()
         
-        # Clear screen
-        screen.fill((255, 255, 255))
-        
-        # Draw board and UI
-        draw_board(screen, width, height)
-        moves_button_rect, popup_rects, undo_button_rect, redo_button_rect, copy_fen_button_rect, paste_fen_button_rect, input_box_rect = draw_ui(screen, width, height, current_time)
-        
-        # Update display
-        pygame.display.flip()
-        
         # Handle events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.VIDEORESIZE:
+                width = max(event.w, MIN_WINDOW_WIDTH)
+                height = max(event.h, MIN_WINDOW_HEIGHT)
+                screen = pygame.display.set_mode((width, height), pygame.RESIZABLE)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = event.pos
                 
@@ -1344,6 +1301,16 @@ def main():
                     handle_ui_click(event.pos, pygame.time.get_ticks())
             elif event.type == pygame.KEYDOWN and input_box_active:
                 handle_keyboard_input(event)
+    
+        # Clear screen
+        screen.fill((255, 255, 255))
+        
+        # Draw board and UI
+        draw_board(screen, width, height)
+        moves_button_rect, popup_rects, undo_button_rect, redo_button_rect, copy_fen_button_rect, paste_fen_button_rect, input_box_rect = draw_ui(screen, width, height, current_time)
+        
+        # Update display
+        pygame.display.flip()
     
     pygame.quit()
     sys.exit()
